@@ -1,8 +1,9 @@
 import argparse
 import operator
 import Queue
-import sets
 import string
+import sys
+from heapq import *
 
 class Puzzle:
     direction = {'N': (-1, 0), 'E': (0, 1), 'S': (1, 0), 'W': (0, -1)}
@@ -14,6 +15,7 @@ class Puzzle:
     current_state = []
     frontier = []
     explored = []
+    lifo = []
     goal_state = []
     total_columns = 0
     total_rows = 0
@@ -31,38 +33,96 @@ class Puzzle:
             current_path = paths.get()
             current_state = current_path[-1][1]
             self.frontier.remove(current_state)
-            print current_state
             self.explored.append(current_state)
             
-            if self._goal_test(current_state):
-#                print current_path
-#                print current_state
-#                print 'goal: ' + str(self.goal_state)
-                 return  self._print_solution(current_path, self.explored)
-            
-                
-            children = self._get_children(current_state)
-            
-            for child in children:
-                if (child not in self.explored) and (child not in self.frontier):
+            for child in self._get_children(current_state):
+                if (child[1] not in self.explored) and (child[1] not in self.frontier):
                     self.frontier.append(child[1])
                     new_path = list(current_path)
                     new_path.append(child)
+                    if self._goal_test(child[1]):
+                         return  self._print_solution(new_path, self.explored)
                     paths.put(new_path)
         return  '[!] No solution found'
             
+    def depth_limited_dfs(self, depth_limit):
+        result = self._recursive_dfs([0, self.initial_state], depth_limit)
+        if result:
+            self._print_solution(self.lifo[::-1], self.explored)
+        return result
     
-    def depth_limited_dfs(self):
-        pass
+    def _recursive_dfs(self, current_state, depth_limit):
+            self.explored.append(current_state)
+            if self._goal_test(current_state[1]):
+                self.lifo.append(current_state)
+                return True
+            elif depth_limit == 0:
+                return False
+            else:
+                cutoff_occurred = False;
+                
+                for child in self._get_children(current_state[1]):
+                    result = self._recursive_dfs(child, depth_limit - 1)
+                    if not result:
+                        cutoff_occurred = True;
+                    elif result:
+                        self.lifo.append(current_state)
+                        return True
+                if cutoff_occurred:
+                    return False
+                     
+            print  '[!] No solution found'
+            return False
+            
+    def iterative_deepening_search(self, depth_limit):
+        for limit in range(1, depth_limit + 1):
+            result = self.depth_limited_dfs(limit)
+            if result:
+                break
     
-    def iterative_deepening_search(self):
-        pass
+    def a_star_search(self, heuristic):
+        paths = []
+        heappush(paths, (self._f_value(self.initial_state, 0, heuristic),[[ 0, self.initial_state]]))
+        self.frontier.append(self.initial_state)
+        
+        while len(paths):
+            current_path = heappop(paths)
+            current_state = current_path[1][-1][1]
+            self.frontier.remove(current_state)
+            self.explored.append(current_state)
+            
+            if self._goal_test(current_state):
+                return  self._print_solution(current_path[1], self.explored)
+            
+            for child in self._get_children(current_state):
+                if (child[1] not in self.explored) and (child[1] not in self.frontier):
+                    self.frontier.append(child[1])
+                    new_path = list(current_path[1])
+                    new_path.append(child)
+                    heappush(paths, (self._f_value(child[1], len(new_path), heuristic), new_path))
+        return  '[!] No solution found'
     
-    def a_star_search(self):
-        pass
-    
-    def greedy_best_first_search(self):
-        pass
+    def greedy_best_first_search(self, heuristic):
+        paths = []
+        heappush(paths, (self._heuristic(self.initial_state, heuristic),[[ 0, self.initial_state]]))
+        self.frontier.append(self.initial_state)
+        
+        while len(paths):
+            current_path = heappop(paths)
+            current_state = current_path[1][-1][1]
+            self.frontier.remove(current_state)
+            self.explored.append(current_state)
+            
+            if self._goal_test(current_state):
+                return  self._print_solution(current_path[1], self.explored)
+            
+            for child in self._get_children(current_state):
+                if (child[1] not in self.explored) and (child[1] not in self.frontier):
+                    self.frontier.append(child[1])
+                    new_path = list(current_path[1])
+                    new_path.append(child)
+                    heappush(paths, (self._heuristic(child[1], heuristic), new_path))
+        return  '[!] No solution found'
     
     def _state_transition(self, direction, input_state):
         next_state = input_state[:]
@@ -75,16 +135,20 @@ class Puzzle:
         next_state[0], next_state[idx] = next_state[idx], next_state[0]
         return next_state
     
-    def _f_value(self, input_state, current_path_length):
-        return current_path_length + self._heuristic_manhattan(input_state)
+    def _f_value(self, input_state, current_path_length, heuristic):
+        return current_path_length + self._heuristic(input_state, heuristic)
     
-    def _heuristic_manhattan(self, input_state):
-        # calculate the manhattan heuristic for current state
-        distance_list = map(self._manhattan_distance, input_state, self.goal_state)
-        return sum(distance_list)
-    
-    def _heuristic_alternative(self):
-        pass
+    def _heuristic(self, input_state, type_of_heuristic):
+        # calculate the heuristic for current state
+        if type_of_heuristic == 'Manhattan':
+            distance_list = map(self._manhattan_distance, input_state, self.goal_state)
+            return sum(distance_list)
+        elif type_of_heuristic == 'Blank':
+            return self._manhattan_distance(input_state[0], (1,1))
+            
+        else:
+            print '[!] Invalid Heuristic: ' + type_of_heuristic
+            sys.exit()
     
     def _manhattan_distance(self, start_tuple, end_tuple):
         # calculate the manhattan distance between two tile positions
@@ -149,13 +213,13 @@ if __name__=="__main__":
     if algorithm == 'BFS':
         puzzle.breadth_first_search()
     elif algorithm == 'DFS':
-        pass
+        puzzle.depth_limited_dfs(int(algorithm_parameter))
     elif algorithm == 'ID':
-        pass
+        puzzle.iterative_deepening_search(int(algorithm_parameter))
     elif algorithm == 'A_Star':
-        pass
+        puzzle.a_star_search(algorithm_parameter)
     elif algorithm == 'Greedy':
-        pass
+        puzzle.greedy_best_first_search(algorithm_parameter)
     else:
         print '[!] Invalid Algorithm: ' + algorithm
         
