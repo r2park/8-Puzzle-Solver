@@ -144,11 +144,14 @@ class Puzzle:
             distance_list = map(self._manhattan_distance, input_state, self.goal_state)
             return sum(distance_list)
         elif type_of_heuristic == 'Blank':
+            print self.goal_state 
+            print input_state
             misplaced_tiles = 0
             for x, y in zip(input_state, self.goal_state):
                 if x != y:
                     misplaced_tiles += 1
-            return sum
+            print misplaced_tiles
+            return misplaced_tiles
             
         else:
             print '[!] Invalid Heuristic: ' + type_of_heuristic
